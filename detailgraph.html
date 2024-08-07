@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detail Graph</title>
+    <!-- Highcharts Library -->
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Basic styles to improve layout */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        .navbar {
+            background-color: #333;
+            color: #fff;
+            padding: 10px;
+        }
+        .navbar ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+        }
+        .navbar li {
+            margin-right: 20px;
+        }
+        .navbar a {
+            color: #fff;
+            text-decoration: none;
+        }
+        .navbar-logo {
+            display: block;
+            margin: 10px auto;
+        }
+        .content {
+            padding: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .controls div {
+            margin-bottom: 10px;
+        }
+        .date-range {
+            display: flex;
+            align-items: center;
+        }
+        .date-range label {
+            margin-right: 10px;
+        }
+        #generate-report-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        #generate-report-btn:hover {
+            background-color: #0056b3;
+        }
+        #container {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <img src="cmti.png" alt="Logo" class="navbar-logo">
+    <!-- Navbar -->
+    <nav class="navbar">
+        <ul>
+            <li><a href="realtimegraph.html">Realtime</a></li>
+            <li><a href="detailgraph.html">Detail Graph</a></li>
+            <li><a href="production.html">Production</a></li>
+            <li><a href="productivity.html">Productivity</a></li>
+            <li><a href="mainpage.html">Back</a></li>
+        </ul>
+    </nav>
+    <!-- Main content -->
+    <div class="content">
+        <h1>Detail Graph Page</h1>
+        <div class="controls">
+            <div>
+                <label for="machine-select">Select Machine:</label>
+                <select id="machine-select">
+                    <option value="Mazak H-400">Mazak H-400</option>
+                    <option value="HMT Stallion 200">HMT Stallion 200</option>
+                    <option value="HMT VTC 800">HMT VTC 800</option>
+                    <option value="Schaublin 33CNC">Schaublin 33CNC</option>
+                </select>
+            </div>
+            <div>
+                <label for="parameter-select">Select Parameter:</label>
+                <select id="parameter-select">
+                    <option value="current">current</option>
+                    <option value="power">power</option>
+                    <option value="energy">energy</option>
+                </select>
+            </div>
+            <div class="date-range">
+                <label for="start-date">Start Date:</label>
+                <input type="date" id="start-date">
+            </div>
+            <div class="date-range">
+                <label for="end-date">End Date:</label>
+                <input type="date" id="end-date">
+            </div>
+            <div>
+                <button id="generate-report-btn">Generate Report</button>
+            </div>
+        </div>
+        <!-- Container for Highcharts -->
+        <div id="container"></div>
+    </div>
+    <script>
+    document.getElementById('generate-report-btn').addEventListener('click', function () {
+    const machine = document.getElementById('machine-select').value;
+    const parameter = document.getElementById('parameter-select').value;
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+
+    // Validate dates
+    if (!startDate || !endDate) {
+        console.error('Start date and end date are required.');
+        return;
+    }
+
+    // Convert date strings to epoch timestamps
+    const startTimestamp = new Date(startDate).getTime();
+    const endTimestamp = new Date(endDate).getTime();
+
+    // Validate timestamps
+    if (isNaN(startTimestamp) || isNaN(endTimestamp)) {
+        console.error('Invalid date range.');
+        return;
+    }
+
+    const lowercaseParameter = parameter.toLowerCase();
+
+    // Fetch data from the endpoint
+    fetch(`http://172.18.7.24:2030/graph/data/?start_date=${encodeURIComponent(startTimestamp/1000)}&end_date=${encodeURIComponent(endTimestamp/1000)}&parameter_name=${encodeURIComponent(lowercaseParameter)}&machine_name=${machine}`, {
+        mode: 'cors' // Ensure CORS headers are handled properly
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        // if (!Array.isArray(data)) {
+        //     throw new Error('Expected array data');
+        // }
+
+        let reformatarray = data.data
+        console.log("Reformated array")
+        console.log(reformatarray)
+
+        const formattedData = reformatarray.map(item => ({
+            x: new Date(item.timestamp).getTime(),
+            y: item.parameter_value
+        }));
+
+        // Define yAxis ranges based on the selected parameter
+        let yAxisRange;
+        switch (parameter) {
+            case 'current':
+                yAxisRange = { min: 0, max: 12, title: { text: 'current (A)' } };
+                break;
+            case 'power':
+                yAxisRange = { min: 0, max: 5, title: { text: 'power (kW)' } };
+                break;
+            case 'energy':
+                yAxisRange = { min: 0, max: 1, title: { text: 'energy (kWh)' } };
+                break;
+            default:
+                yAxisRange = { min: 0, title: { text: 'Value' } };
+                break;
+        }
+
+        // Initialize the chart
+        Highcharts.chart('container', {
+            chart: {
+                type: 'spline',
+                events: {
+                    load: onChartLoad
+                }
+            },
+            time: {
+                useUTC: false
+            },
+            title: {
+                text: `${parameter} data for ${machine}`
+            },
+            accessibility: {
+                announceNewData: {
+                    enabled: true,
+                    minAnnounceInterval: 15000,
+                    announcementFormatter: function (allSeries, newSeries, newPoint) {
+                        if (newPoint) {
+                            return 'New point added. Value: ' + newPoint.y;
+                        }
+                        return false;
+                    }
+                }
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150,
+                maxPadding: 0.1
+            },
+            yAxis: yAxisRange,
+            tooltip: {
+                headerFormat: '<b>{series.name}</b><br/>',
+                pointFormat: '{point.x:%Y-%m-%d %H:%M:%S}<br/>{point.y:.2f}'
+            },
+            legend: {
+                enabled: false
+            },
+            exporting: {
+                enabled: false
+            },
+            series: [{
+                name: parameter,
+                lineWidth: 2,
+                color: Highcharts.getOptions().colors[2],
+                data: formattedData
+            }]
+        });
+
+        // Function to update the chart
+        function onChartLoad() {
+            const chart = this,
+                series = chart.series[0];
+            // setInterval(function () {
+            //     const x = (new Date()).getTime(),
+            //         y = Math.random(); // Replace this with your logic to get live data
+            //     series.addPoint([x, y], true, true);
+            // }, 1000);
+        }
+
+        // Plugin to add a pulsating marker on add point
+        Highcharts.addEvent(Highcharts.Series, 'addPoint', e => {
+            const point = e.point,
+                series = e.target;
+            if (!series.pulse) {
+                series.pulse = series.chart.renderer.circle()
+                    .add(series.markerGroup);
+            }
+            setTimeout(() => {
+                series.pulse
+                    .attr({
+                        x: series.xAxis.toPixels(point.x, true),
+                        y: series.yAxis.toPixels(point.y, true),
+                        r: series.options.marker.radius,
+                        opacity: 1,
+                        fill: series.color
+                    })
+                    .animate({
+                        r: 20,
+                        opacity: 0
+                    }, {
+                        duration: 1000
+                    });
+            }, 1);
+        });
+    })
+    .catch(error => {
+        console.error('Error fetching data:', error);
+    });
+});
+</script>
+</body>
+</html>

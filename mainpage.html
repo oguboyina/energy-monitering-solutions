@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Page</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.3.3/echarts.min.js"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <ul>
+            <li><img src="cmti.png" alt="Logo" class="navbar-logo"></li>
+            <li><a href="realtimegraph.html">Realtime</a></li>
+            <li><a href="detailgraph.html">Detail Graph</a></li>
+            <li><a href="production.html">Production</a></li>
+            <li><a href="productivity.html">Productivity</a></li>
+            <li><a href="report.html">Report</a></li>
+            <li><a href="mainpage.html">Back</a></li>
+        </ul>
+    </nav>
+
+    
+
+    <!-- Four containers in a row -->
+    <div class="container-row">
+        <div class="box">
+            <h3>Mazak-H400</h3>
+            <img src="Mazak H-400.png" alt="Machine Image" class="machine-image">
+        </div>
+        <div class="box" id="current-gauge"></div>
+        <div class="box" id="power-gauge"></div>
+        <div class="box" id="energy-gauge"></div>
+    </div>
+   <!-- Bar charts for Current, Power, and Energy -->
+<div class="bar-chart-container">
+    <div class="bar-chart-box">
+        <h3>Current Chart</h3>
+        <div id="current-bar-chart" style="width: 100%; height: 300px;"></div>
+    </div>
+    <div class="bar-chart-box">
+        <h3>Power Chart</h3>
+        <div id="power-bar-chart" style="width: 100%; height: 300px;"></div>
+    </div>
+    <div class="bar-chart-box">
+        <h3>Energy Chart</h3>
+        <div id="energy-bar-chart" style="width: 100%; height: 300px;"></div>
+    </div>
+</div>
+
+
+    <script src="script.js"></script>
+</body>
+</html>

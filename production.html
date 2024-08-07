@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/xrange.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <style>
+        .form-row {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 40px;
+        }
+        .form-row label, .form-row input, .form-row select, .form-row button {
+            font-size: 1.6em;
+        }
+        .form-row button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+        }
+        #chart-container {
+            width: 100%;
+            height: 500px;
+            margin-top: 20px;
+        }
+        .button-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .button-container button {
+            font-size: 1em;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <img src="cmti.png" alt="Logo" class="navbar-logo">
+    <nav class="navbar">
+        <ul>
+            <li><a href="realtimegraph.html">Realtime</a></li>
+            <li><a href="detailgraph.html">Detail Graph</a></li>
+            <li><a href="production.html">Production</a></li>
+            <li><a href="productivity.html">Productivity</a></li>
+            <li><a href="mainpage.html">Back</a></li>
+        </ul>
+    </nav>
+    <h1>Production Page</h1>
+    <div class="form-row">
+        <div class="date-range">
+            <label for="date-select">Select Date:</label>
+            <input type="date" id="date-select" name="date-select">
+        </div>
+        <div>
+            <label for="machine-select">Select Machine:</label>
+            <select id="machine-select" name="machine">
+                <option value="d">Mazak H-400</option>
+            </select>
+        </div>
+        <div>
+            <button id="Submit">Submit</button>
+            <button id="resetZoom">Reset Zoom</button>
+        </div>
+    </div>
+r
+    <div id="chart-container"></div>
+
+    <!-- Hourly Buttons -->
+    <div class="button-container" id="hour-buttons"></div>
+
+    <script>
+        let chart;
+        let updateInterval;
+
+        // Set the default date to today
+        document.getElementById('date-select').valueAsDate = new Date();
+
+        document.getElementById('Submit').addEventListener('click', function() {
+            var selectedDate = document.getElementById('date-select').value;
+            var machineId = document.getElementById('machine-select').value;
+            if (!selectedDate || !machineId) {
+                alert('Please select both a date and a machine.');
+                return;
+            }
+
+            // Clear previous interval if exists
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+
+            // Initialize chart
+            initializeChart();
+
+            // Fetch initial data and start live updates
+            fetchDataAndUpdateChart(machineId, selectedDate);
+            updateInterval = setInterval(() => fetchDataAndUpdateChart(machineId, selectedDate), 5000);
+
+            // Generate hourly buttons
+            generateHourlyButtons(selectedDate);
+        });
+
+        function initializeChart() {
+            chart = Highcharts.chart('chart-container', {
+                chart: {
+                    type: 'xrange',
+                    zoomType: 'xy' // Enable zooming and scrolling on both axes
+                },
+                title: {
+                    text: 'Machine Production Status'
+                },
+                xAxis: {
+                    type: 'datetime',
+                    title: {
+                        text: 'Time'
+                    },
+                    labels: {
+                        format: '{value:%H:%M}'
+                    },
+                    minRange: 60 * 1000 // Minimum range set to 1 minute
+                },
+                yAxis: {
+                    title: {
+                        text: 'Machine'
+                    },
+                    categories: ['Machine'],
+                    reversed: true
+                },
+                plotOptions: {
+                    series: {
+                        stacking: 'normal',
+                        dataLabels: {
+                            enabled: true,
+                            formatter: function () {
+                                return this.point.name;
+                            }
+                        }
+                    }
+                },
+                series: [{
+                    name: 'Machine Status',
+                    data: [],
+                    colorByPoint: true
+                }]
+            });
+
+            // Add event listener for reset zoom button
+            document.getElementById('resetZoom').addEventListener('click', function() {
+                chart.zoomOut();
+            });
+        }
+
+        function fetchDataAndUpdateChart(machineId, selectedDate) {
+            var url = `http://172.18.100.33:9999/prod_graph/get_production_data?date=${selectedDate}&machine_id=${machineId}`;
+            console.log('Fetching data from URL:', url);
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error('No data available for the selected date.');
+                        }
+                        return response.json().then(error => {
+                            throw new Error(JSON.stringify(error));
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const seriesData = [];
+                    const startOfDay = new Date(selectedDate).setHours(0, 0, 0, 0);
+                    const localOffset = new Date().getTimezoneOffset() * 60000;
+
+                    // Add initial 'Off' state from 12 AM to the first actual data point or end of the day
+                    let initialOffState = {
+                        x: startOfDay - localOffset,
+                        x2: startOfDay + 24 * 60 * 60 * 1000 - localOffset, // Default to end of day
+                        y: 0,
+                        name: 'OFF',
+                        color: 'violet'
+                    };
+
+                    // Set 'Off' state from 5:30 PM to midnight
+                    let eveningOffState = {
+                        x: new Date(selectedDate).setHours(17, 30, 0, 0) - localOffset,
+                        x2: startOfDay + 24 * 60 * 60 * 1000 - localOffset,
+                        y: 0,
+                        name: 'OFF',
+                        color: 'violet'
+                    };
+
+                    if (!data.dataPoints || data.dataPoints.length === 0) {
+                        console.log("No data received from server");
+                        seriesData.push(initialOffState, eveningOffState);
+                        chart.series[0].setData(seriesData);
+                        chart.showLoading('No data available for the selected date.');
+                        return;
+                    }
+
+                    chart.hideLoading();
+
+                    const dataPoints = data.dataPoints;
+                    console.log("Data points:", dataPoints);
+
+                    dataPoints.sort((a, b) => a.value[0] - b.value[0]);
+
+                    initialOffState.x2 = dataPoints[0].value[0] - localOffset;
+
+                    seriesData.push(initialOffState);
+                    dataPoints.forEach(item => {
+                        const startTimeMillis = item.value[0] - localOffset;
+                        const endTimeMillis = item.value[1] - localOffset;
+
+                        let color;
+                        if (item.name === 'PRODUCTION') {
+                            color = 'green';
+                        } else if (item.name === 'ON') {
+                            color = 'blue';
+                        } else if (item.name === 'OFF') {
+                            color = 'violet';
+                        }
+
+                        seriesData.push({
+                            x: startTimeMillis,
+                            x2: endTimeMillis,
+                            y: 0,
+                            name: item.name,
+                            color: color
+                        });
+                    });
+
+                    seriesData.push(eveningOffState);
+
+                    chart.series[0].setData(seriesData);
+
+                    chart.setTitle({ text: `Machine Production Status for ${machineId} (Last updated: ${new Date().toLocaleTimeString()})` });
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                    chart.showLoading(error.message);
+                });
+        }
+
+        function generateHourlyButtons(date) {
+    const buttonContainer = document.getElementById('hour-buttons');
+    buttonContainer.innerHTML = '';
+
+    // Generate buttons for each hour of the day (24-hour format)
+    for (let hour = 0; hour < 24; hour++) {
+        const button = document.createElement('button');
+        button.textContent = `${hour < 10 ? '0' : ''}${hour}:00`;
+        button.addEventListener('click', () => {
+            const startOfHour = new Date(date).setHours(hour, 0, 0, 0);
+            const endOfHour = new Date(date).setHours(hour + 1, 0, 0, 0);
+            const timeRange = [startOfHour, endOfHour];
+            updateChartForTimeRange(timeRange);
+        });
+        buttonContainer.appendChild(button);
+    }
+}
+
+        function updateChartForTimeRange(timeRange) {
+            const [startTime, endTime] = timeRange;
+            const seriesData = chart.series[0].data.filter(point => {
+                return (point.x >= startTime && point.x < endTime) || (point.x2 > startTime && point.x2 <= endTime);
+            });
+
+            chart.series[0].setData(seriesData);
+            chart.xAxis[0].setExtremes(startTime, endTime);
+        }
+    </script>
+</body>
+</html> 
